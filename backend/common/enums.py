@@ -20,3 +20,13 @@ class WorkerStatus(str, Enum):
     ONLINE = "ONLINE"
     OFFLINE = "OFFLINE"
     BUSY = "BUSY"
+
+
+class TaskStatus(str, Enum):
+    PENDING = "PENDING"
+    READY = "READY"
+    RUNNING = "RUNNING"
+    SUCCESS = "SUCCESS"
+    FAILED = "FAILED"
+    RETRYING = "RETRYING"
+    SKIPPED = "SKIPPED"

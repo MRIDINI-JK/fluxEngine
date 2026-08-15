@@ -1,3 +1,12 @@
+from .executor import WorkflowExecutor
+from .context import ExecutionContext, TaskExecution
+from .state_machine import (
+    ExecutionStateMachine,
+    InvalidStateTransition,
+)
+from .checkpoint import CheckpointManager
+from .retry import RetryPolicy
+from .recovery import WorkflowRecovery
 from .parser import (
     WorkflowDefinition,
     NodeDefinition,
@@ -31,4 +40,12 @@ __all__ = [
     "WorkflowValidationError",
     "WorkflowCompiler",
     "CompiledWorkflow",
+    "WorkflowExecutor",
+    "ExecutionContext",
+    "TaskExecution",
+    "ExecutionStateMachine",
+    "InvalidStateTransition",
+    "CheckpointManager",
+    "RetryPolicy",
+    "WorkflowRecovery",
 ]
