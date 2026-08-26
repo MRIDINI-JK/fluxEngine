@@ -60,3 +60,36 @@ Phase 7 Architecture
                                  │
                                  ▼
                        Workflow Executor
+
+
+                         FLUXENGINE
+                             │
+        ┌────────────────────┼────────────────────┐
+        │                    │                    │
+        ▼                    ▼                    ▼
+   REST API             Scheduler          WebSocket
+        │                    │                    │
+        │             Cron / Timer              │
+        │                    │                    │
+        └────────────────────┼────────────────────┘
+                             ▼
+                         RabbitMQ
+                             │
+                             ▼
+                    Workflow Engine
+                             │
+                      ┌──────┴──────┐
+                      │             │
+                    DAG          Executor
+                      │             │
+                      └──────┬──────┘
+                             ▼
+                         RabbitMQ
+                             │
+                ┌────────────┼────────────┐
+                ▼            ▼            ▼
+             Worker 1     Worker 2     Worker 3
+                │            │            │
+                └────────────┼────────────┘
+                             ▼
+                         PostgreSQL

@@ -1,5 +1,5 @@
 from enum import Enum
-
+from uuid import UUID
 from pydantic import BaseModel, Field
 
 from typing import Any
@@ -60,7 +60,7 @@ class Event(BaseModel):
     source: str
 
     workflow_id: int | None = None
-    workflow_run_id: int | None = None
+    workflow_run_id: UUID  | None = None
     task_id: int | None = None
     task_run_id: int | None = None
     worker_id: int | None = None
