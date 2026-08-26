@@ -93,3 +93,32 @@ Phase 7 Architecture
                 └────────────┼────────────┘
                              ▼
                          PostgreSQL
+
+                         Module 9 
+
+                                                  React
+                           │
+                         HTTP
+                           │
+                           ▼
+                    ┌──────────────┐
+                    │   FastAPI    │
+                    └──────┬───────┘
+                           │
+          ┌────────────────┼────────────────┐
+          │                │                │
+          ▼                ▼                ▼
+     Workflows         Executions       Schedules
+          │                │                │
+          ▼                ▼                ▼
+     Compiler          Run State       Scheduler
+          │                │                │
+          └────────────────┼────────────────┘
+                           ▼
+                       RabbitMQ
+                           │
+                           ▼
+                   Workflow Engine
+                           │
+                           ▼
+                        Workers
