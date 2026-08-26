@@ -7,15 +7,23 @@ from aio_pika import (
 )
 
 from backend.config import settings
-from backend.event_bus.routing import EXCHANGE_NAME
+from backend.event_bus.routing import (
+    EXCHANGE_NAME,
+    TASK_EXCHANGE_NAME,
+)
 
 
 class RabbitMQ:
 
     def __init__(self):
+
         self.connection: RobustConnection | None = None
+
         self.channel: Channel | None = None
+
         self.exchange: Exchange | None = None
+
+        self.task_exchange: Exchange | None = None
 
     async def connect(self):
 
@@ -32,7 +40,13 @@ class RabbitMQ:
         self.exchange = await self.channel.declare_exchange(
             EXCHANGE_NAME,
             ExchangeType.TOPIC,
-            durable=True
+            durable=True,
+        )
+
+        self.task_exchange = await self.channel.declare_exchange(
+            TASK_EXCHANGE_NAME,
+            ExchangeType.DIRECT,
+            durable=True,
         )
 
         return self
@@ -43,6 +57,7 @@ class RabbitMQ:
 
             await self.connection.close()
 
-            self.connection = None
-            self.channel = None
-            self.exchange = None
+        self.connection = None
+        self.channel = None
+        self.exchange = None
+        self.task_exchange = None

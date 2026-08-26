@@ -2,7 +2,41 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
+from typing import Any
 
+from pydantic import BaseModel, Field
+
+
+class TaskMessage(BaseModel):
+    task_run_id: str
+
+    workflow_run_id: str
+
+    task_id: str
+
+    task_type: str
+
+    payload: dict[str, Any] = Field(
+        default_factory=dict
+    )
+
+
+class TaskResult(BaseModel):
+    task_run_id: str
+
+    workflow_run_id: str
+
+    task_id: str
+
+    worker_id: str
+
+    success: bool
+
+    result: Any = None
+
+    error: str | None = None
+
+    attempts: int = 1
 class EventType(str, Enum):
     WORKFLOW_STARTED = "workflow.started"
     WORKFLOW_COMPLETED = "workflow.completed"

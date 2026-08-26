@@ -28,3 +28,35 @@ Phase 6 Architeture
              │
              ▼
         Task Execution
+
+
+Phase 7 Architecture
+
+                       ┌───────────────────┐
+                       │  Workflow Engine  │
+                       └─────────┬─────────┘
+                                 │
+                          task.dispatched
+                                 │
+                                 ▼
+                         ┌──────────────┐
+                         │   RabbitMQ   │
+                         └───────┬──────┘
+                                 │
+                     ┌───────────┼───────────┐
+                     │           │           │
+                     ▼           ▼           ▼
+                 Worker 1    Worker 2    Worker 3
+                 Python      HTTP        LLM
+                     │           │           │
+                     └───────────┼───────────┘
+                                 │
+                            task.result
+                                 │
+                                 ▼
+                         ┌──────────────┐
+                         │   RabbitMQ   │
+                         └───────┬──────┘
+                                 │
+                                 ▼
+                       Workflow Executor

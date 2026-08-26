@@ -3,10 +3,13 @@ from backend.event_bus.events import EventType
 
 EXCHANGE_NAME = "flux.events"
 
+TASK_EXCHANGE_NAME = "flux.tasks"
 
 WORKFLOW_QUEUE = "flux.workflow"
 
 WORKER_QUEUE = "flux.worker"
+
+RESULT_QUEUE = "flux.results"
 
 SCHEDULER_QUEUE = "flux.scheduler"
 
