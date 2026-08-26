@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-
+from backend.api.websocket import router as websocket_router
 from backend.api.routes import (
     health_router,
     workflow_router,
@@ -32,7 +32,9 @@ app.include_router(
 app.include_router(
     schedule_router
 )
-
+app.include_router(
+    websocket_router
+)
 
 @app.get("/")
 async def root():

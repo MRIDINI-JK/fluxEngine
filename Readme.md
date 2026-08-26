@@ -122,3 +122,37 @@ Phase 7 Architecture
                            │
                            ▼
                         Workers
+
+                        Module 10
+
+                                                      React
+                          /           \
+                       REST          WebSocket
+                        │                │
+                        ▼                ▼
+                    ┌────────────────────────┐
+                    │        FastAPI         │
+                    └───────────┬────────────┘
+                                │
+             ┌──────────────────┼──────────────────┐
+             │                  │                  │
+             ▼                  ▼                  ▼
+         Workflows          Executions         Scheduler
+             │                  │                  │
+             └──────────────────┼──────────────────┘
+                                ▼
+                           RabbitMQ
+                                │
+                    ┌───────────┼───────────┐
+                    ▼           ▼           ▼
+               Workflow      Workers     WebSocket
+                Engine                    Bridge
+                    │                       │
+                    ▼                       ▼
+                 Executor               Browsers
+                    │
+                    ▼
+                 Workers
+                    │
+                    ▼
+               PostgreSQL
