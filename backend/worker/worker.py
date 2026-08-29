@@ -1,11 +1,28 @@
 import asyncio
 import socket
 import uuid
-
+from datetime import datetime, timezone
 from aio_pika import Message
 
-from backend.common.logger import logger
 
+from backend.database.models import event
+from backend.database.models import event
+import time
+from backend.common.logger import logger
+from backend.database.models import event
+from backend.database.models import event
+from backend.event_bus import (
+    Event,
+    EventType,
+)
+
+# from backend.monitoring.metrics import (
+#     TASKS_STARTED,
+#     TASKS_COMPLETED,
+#     TASKS_FAILED,
+#     TASKS_RETRIED,
+#     TASK_DURATION,
+# )
 from backend.event_bus import (
     RabbitMQ,
 )
@@ -58,10 +75,17 @@ class Worker:
             worker_id=self.worker_id,
             task_runner=self.task_runner,
         )
-
+        self.heartbeat_task = None
+        self.busy = False
     async def start(self):
 
         await self.rabbitmq.connect()
+
+        await self._register_worker()
+
+        self.heartbeat_task = asyncio.create_task(
+        self._heartbeat_loop()
+    )
 
         worker_info = WorkerInfo(
             worker_id=self.worker_id,
@@ -78,7 +102,7 @@ class Worker:
         logger.info(
             f"Worker started: "
             f"{self.worker_id}"
-        )
+       )
 
         logger.info(
             f"Capabilities: "
@@ -132,20 +156,130 @@ class Worker:
                     )
 
                     logger.info(
-                        f"Received task: "
-                        f"{task.task_id}"
-                    )
+                    f"Received task: "
+                    f"{task.task_id}"
+)
 
-                    result = (
-                        await self.executor.execute(
+                    logger.info(
+                    f"Task started: "
+                    f"{task.task_id}"
+)
+
+                    self.busy = True
+
+                    start_time = time.perf_counter()
+
+                    await self._publish_task_event(
+                    EventType.TASK_STARTED,
+                    task,
+)
+
+                    try:
+
+                        result = await self.executor.execute(
                             task
-                        )
-                    )
+    )
+
+                        duration = (
+                time.perf_counter()
+        - start_time
+    )
+
+                        if result.success:
+
+                            await self._publish_task_event(
+                        EventType.TASK_COMPLETED,
+                task,
+                        result=result,
+                        duration=duration,
+        )
+
+                        else:
+
+                            await self._publish_task_event(
+                    EventType.TASK_FAILED,
+                    task,
+                    result=result,
+                    duration=duration,
+        )
+
+                        logger.info(
+        f"Task completed: "
+        f"{task.task_id} "
+        f"success={result.success} "
+        f"attempts={result.attempts}"
+    )
+
+                    finally:
+
+                        self.busy = False
 
                     await self._publish_result(
-                        result
-                    )
+    result
+)
+    async def _publish_task_event(
+    self,
+    event_type,
+    task,
+    result=None,
+    duration=None,
+):
 
+        if self.rabbitmq.exchange is None:
+
+            raise RuntimeError(
+            "RabbitMQ exchange unavailable"
+        )
+
+        payload = {
+        "task_id": task.task_id,
+        "workflow_run_id": task.workflow_run_id,
+    }
+
+        if result is not None:
+
+            payload.update({
+            "success": result.success,
+            "attempts": result.attempts,
+            "result": result.result,
+            "error": result.error,
+        })
+
+        if duration is not None:
+
+            payload["duration"] = duration
+
+        event = Event(
+            event_id=str(uuid.uuid4()),
+
+        event_type=event_type,
+
+        source="worker",
+
+        payload=payload,
+    )
+
+        message = Message(
+        body=event.model_dump_json().encode(
+            "utf-8"
+        ),
+
+        content_type="application/json",
+
+        message_id=event.event_id,
+    )
+
+        await self.rabbitmq.exchange.publish(
+        message,
+
+        routing_key=event_type.value,
+    )
+
+        logger.info(
+        f"Published event: "
+        f"{event_type.value} "
+        f"task={task.task_id}"
+    )
     async def _publish_result(
         self,
         result,
@@ -176,3 +310,135 @@ class Worker:
             f"Published result for "
             f"{result.task_id}"
         )
+    async def _register_worker(self):
+
+        if self.rabbitmq.exchange is None:
+            raise RuntimeError(
+                "RabbitMQ exchange unavailable"
+            )
+
+        event = Event(
+            event_id=str(uuid.uuid4()),
+
+            event_type=(
+                    EventType.WORKER_REGISTERED
+                ),
+
+            source="worker",
+
+            payload={
+            "worker_id": self.worker_id,
+
+            "hostname": self.hostname,
+
+            "capabilities": list(
+                self.capabilities
+            ),
+        },
+    )
+
+        message = Message(
+            body=event.model_dump_json().encode(
+                "utf-8"
+            ),
+
+            content_type="application/json",
+
+            message_id=event.event_id,
+        )
+
+        await self.rabbitmq.exchange.publish(
+            message,
+            routing_key=(
+                EventType.WORKER_REGISTERED.value
+        ),
+        )
+
+        logger.info(
+            f"Worker registration event "
+            f"published: {self.worker_id}"
+        )
+    async def _heartbeat_loop(self):
+
+        while True:
+
+            try:
+
+                await self._publish_heartbeat()
+
+                await asyncio.sleep(10)
+
+            except asyncio.CancelledError:
+
+                logger.info(
+                    "Worker heartbeat stopped"
+            )
+
+                break
+
+            except Exception as exc:
+
+                logger.error(
+                    f"Heartbeat failed: {exc}"
+            )
+
+                await asyncio.sleep(10)
+    async def _publish_heartbeat(self):
+
+        if self.rabbitmq.exchange is None:
+
+            raise RuntimeError(
+                "RabbitMQ exchange unavailable"
+            )
+
+        event = Event(
+            event_id=str(uuid.uuid4()),
+
+            event_type=(
+                EventType.WORKER_HEARTBEAT
+        ),
+
+            source="worker",
+
+            payload={
+                "worker_id": self.worker_id,
+
+                "hostname": self.hostname,
+
+                "capabilities": list(
+                    self.capabilities
+            ),
+                "timestamp": datetime.now(
+        timezone.utc
+    ).isoformat(),
+
+                "busy": self.busy,
+                "timestamp": datetime.now(
+                    timezone.utc
+                ).isoformat(),
+
+        },
+    )
+
+        message = Message(
+            body=event.model_dump_json().encode(
+                "utf-8"
+        ),
+
+            content_type="application/json",
+
+            message_id=event.event_id,
+    )
+
+        await self.rabbitmq.exchange.publish(
+            message,
+
+            routing_key=(
+                EventType.WORKER_HEARTBEAT.value
+        ),
+    )
+
+        logger.info(
+            f"Worker heartbeat: "
+            f"{self.worker_id}"
+    )

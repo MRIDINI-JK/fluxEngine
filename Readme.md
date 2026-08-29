@@ -156,3 +156,42 @@ Phase 7 Architecture
                     │
                     ▼
                PostgreSQL
+
+               11th Module
+
+                                          FLUXENGINE
+                               │
+             ┌─────────────────┼─────────────────┐
+             │                 │                 │
+             ▼                 ▼                 ▼
+          REST API          Scheduler         WebSocket
+             │                 │                 │
+             └─────────────────┼─────────────────┘
+                               ▼
+                           RabbitMQ
+                               │
+                    ┌──────────┼──────────┐
+                    │          │          │
+                    ▼          ▼          ▼
+                Workflow     Workers   Event Bridge
+                 Engine                   │
+                    │                    ▼
+                    │                  React
+                    ▼
+                 Executor
+                    │
+                    ▼
+                  Tasks
+                    │
+                    ▼
+               PostgreSQL
+                    ▲
+                    │
+               Monitoring
+                    │
+             ┌──────┴──────┐
+             ▼             ▼
+          Metrics        Health
+             │
+             ▼
+         Prometheus

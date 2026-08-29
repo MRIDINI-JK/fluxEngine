@@ -1,0 +1,1 @@
+$env:Path += ";$env:APPDATA\Python\Python312\Scripts"

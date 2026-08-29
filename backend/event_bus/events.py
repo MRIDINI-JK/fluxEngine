@@ -1,9 +1,7 @@
 from enum import Enum
 from uuid import UUID
-from pydantic import BaseModel, Field
-
 from typing import Any
-
+from aio_pika import Message
 from pydantic import BaseModel, Field
 
 
@@ -66,3 +64,7 @@ class Event(BaseModel):
     worker_id: int | None = None
 
     payload: dict = Field(default_factory=dict) 
+    def to_message(self) -> Message:
+        return Message(
+            body=self.model_dump_json().encode("utf-8")
+        )
