@@ -3,7 +3,7 @@ import socket
 import uuid
 from datetime import datetime, timezone
 from aio_pika import Message
-
+from typing import Any
 
 from backend.database.models import event
 from backend.database.models import event
@@ -75,8 +75,28 @@ class Worker:
             worker_id=self.worker_id,
             task_runner=self.task_runner,
         )
+        self.task_runner.register(
+                "python",
+            self.python_task,
+)
         self.heartbeat_task = None
         self.busy = False
+    async def python_task(
+        self,
+        payload: dict[str, Any],
+    ):
+
+        value = payload.get(
+            "value",
+            0,
+        )
+
+        logger.info(
+            f"Running python task with value={value}"
+        )
+
+        return value * 2
+
     async def start(self):
 
         await self.rabbitmq.connect()

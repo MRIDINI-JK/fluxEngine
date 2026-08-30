@@ -265,4 +265,35 @@ Task execution
                TaskResult
 
 
+               Module 15
+
                
+                 TaskDispatcher
+                       │
+                       ▼
+                    RabbitMQ
+                       │
+                       ▼
+                    Worker
+                       │
+                       ▼
+                  TaskRunner
+                       │
+                task_type=python
+                       │
+                       ▼
+                  python_task()
+                       │
+                    21 × 2
+                       │
+                       ▼
+                      42
+                       │
+                       ▼
+                  TaskResult
+                       │
+                       ▼
+                    RabbitMQ
+                       │
+                       ▼
+              TaskResultConsumer
