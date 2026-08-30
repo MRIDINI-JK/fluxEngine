@@ -1,10 +1,18 @@
 import asyncio
 from collections.abc import Awaitable, Callable
 from typing import Any
-
+import time
 from backend.common.enums import (
     ExecutionStatus,
     TaskStatus,
+)
+
+from backend.monitoring.metrics import (
+    WORKFLOWS_STARTED,
+    WORKFLOWS_COMPLETED,
+    WORKFLOWS_FAILED,
+    WORKFLOWS_RUNNING,
+    WORKFLOW_DURATION,
 )
 
 from backend.workflow_engine.compiler import (
@@ -72,11 +80,25 @@ class WorkflowExecutor:
         workflow_run_id: str,
         input_data: dict[str, Any] | None = None,
     ):
+        # print("========== WORKFLOW EXECUTOR ENTERED ==========")
+        # print("WORKFLOW RUN ID:", workflow_run_id)
 
         context = ExecutionContext(
             workflow_run_id=workflow_run_id,
             input_data=input_data or {},
         )
+        print(
+    "WORKFLOW EXECUTOR CALLED:",
+    workflow_run_id,
+)
+        WORKFLOWS_STARTED.inc()
+        # print(
+    # "WORKFLOW STARTED METRIC:",
+    # WORKFLOWS_STARTED._value.get(),
+# )
+        WORKFLOWS_RUNNING.inc()
+
+        start_time = time.perf_counter()
 
         # Initialize task state
         for node in workflow.graph.nodes.values():
@@ -113,7 +135,11 @@ class WorkflowExecutor:
                     ExecutionStatus.SUCCESS,
                 )
             )
-
+            WORKFLOWS_COMPLETED.inc()
+#             print(
+#     "WORKFLOW COMPLETED METRIC:",
+#     WORKFLOWS_COMPLETED._value.get(),
+# )
         except Exception as exc:
 
             context.error = str(exc)
@@ -124,10 +150,22 @@ class WorkflowExecutor:
                     ExecutionStatus.FAILED,
                 )
             )
-
+            WORKFLOWS_FAILED.inc()
             self.checkpoint_manager.save(context)
 
             raise
+        finally:
+
+            duration = (
+            time.perf_counter()
+            - start_time
+    )
+
+            WORKFLOW_DURATION.observe(
+        duration
+    )
+
+            WORKFLOWS_RUNNING.dec()
 
         self.checkpoint_manager.save(context)
 

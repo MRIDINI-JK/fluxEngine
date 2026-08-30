@@ -1,1 +1,255 @@
 $env:Path += ";$env:APPDATA\Python\Python312\Scripts"
+
+$body = @{
+>>     name = "Demo Workflow"
+>>     version = 1
+>>     definition = @{
+>>         name = "Demo Workflow"
+>>         version = 1
+>> 
+>>         nodes = @(
+>>             @{
+>>                 id = "start"
+>>                 type = "start"
+>>             },
+>>             @{
+>>                 id = "task_a"
+>>                 type = "python"
+>>                 config = @{
+>>                     function = "process_a"
+>>                 }
+>>             },
+>>             @{
+>>                 id = "task_b"
+>>                 type = "python"
+>>                 config = @{
+>>                     function = "process_b"
+>>                 }
+>>             },
+>>             @{
+>>                 id = "end"
+>>                 type = "end"
+>>             }
+>>         )
+>> 
+>>         edges = @(
+>>             @{
+>>                 source = "start"
+>>                 target = "task_a"
+>>             },
+>>             @{
+>>                 source = "task_a"
+>>                 target = "task_b"
+>>             },
+>>             @{
+>>                 source = "task_b"
+>>                 target = "end"
+>>             }
+>>         )
+>>     }
+>> } | ConvertTo-Json -Depth 10
+>> 
+>> Invoke-RestMethod `
+>>     -Method Post `
+>>     -Uri http://127.0.0.1:8000/workflows `
+>>     -ContentType "application/json" `
+>>     -Body $body
+
+id name          version definition                                                               
+-- ----          ------- ----------                                                               
+ 1 Demo Workflow       1 @{edges=System.Object[]; name=Demo Workflow; version=1; nodes=System.O...
+
+
+PS F:\FluxEngine> Invoke-RestMethod http://127.0.0.1:8000/workflows
+
+id name          version definition                                                               
+-- ----          ------- ----------                                                               
+ 1 Demo Workflow       1 @{edges=System.Object[]; name=Demo Workflow; version=1; nodes=System.O...
+
+
+PS F:\FluxEngine> $body = @{                                       
+>>     name = "Demo Workflow"
+>>     version = 1
+>>     definition = @{
+>>         name = "Demo Workflow"
+>>         version = 1
+>> 
+>>         nodes = @(
+>>             @{
+>>                 id = "start"
+>>                 type = "start"
+>>             },
+>>             @{
+>>                 id = "task_a"
+>>                 type = "python"
+>>                 config = @{
+>>                     function = "process_a"
+>>                 }
+>>             },
+>>             @{
+>>                 id = "task_b"
+>>                 type = "python"
+>>                 config = @{
+>>                     function = "process_b"
+>>                 }
+>>             },
+>>             @{
+>>                 id = "end"
+>>                 type = "end"
+>>             }
+>>         )
+>> 
+>>         edges = @(
+>>             @{
+>>                 source = "start"
+>>                 target = "task_a"
+>>             },
+>>             @{
+>>                 source = "task_a"
+>>                 target = "task_b"
+>>             },
+>>             @{
+>>                 source = "task_b"
+>>                 target = "end"
+>>             }
+>>         )
+>>     }
+>> } | ConvertTo-Json -Depth 10
+>> 
+>> Invoke-RestMethod `
+>>     -Method Post `
+>>     -Uri http://127.0.0.1:8000/workflows `
+>>     -ContentType "application/json" `
+>>     -Body $body
+
+id name          version definition                                                               
+-- ----          ------- ----------                                                               
+ 2 Demo Workflow       1 @{edges=System.Object[]; name=Demo Workflow; version=1; nodes=System.O...
+
+
+
+to exectue
+
+$body = @{
+    input_data = @{
+        value = 21
+    }
+} | ConvertTo-Json -Depth 10
+
+Invoke-RestMethod `
+    -Method Post `
+    -Uri http://127.0.0.1:8000/executions/workflow/1 `
+    -ContentType "application/json" `
+    -Body $body
+
+
+    to check metrics
+
+    (Invoke-WebRequest `
+    http://127.0.0.1:8000/monitoring/metrics
+).Content |
+Select-String "fluxengine_workflows"
+
+
+
+
+workflow
+
+$body = @{
+    name = "Demo Workflow"
+    version = 1
+    definition = @{
+        name = "Demo Workflow"
+        version = 1
+
+        nodes = @(
+            @{
+                id = "start"
+                type = "start"
+            },
+            @{
+                id = "task_a"
+                type = "python"
+                config = @{
+                    function = "process_a"
+                }
+            },
+            @{
+                id = "task_b"
+                type = "python"
+                config = @{
+                    function = "process_b"
+                }
+            },
+            @{
+                id = "end"
+                type = "end"
+            }
+        )
+
+        edges = @(
+            @{
+                source = "start"
+                target = "task_a"
+            },
+            @{
+                source = "task_a"
+                target = "task_b"
+            },
+            @{
+                source = "task_b"
+                target = "end"
+            }
+        )
+    }
+} | ConvertTo-Json -Depth 10
+
+Invoke-RestMethod `
+    -Method Post `
+    -Uri http://127.0.0.1:8000/workflows `
+    -ContentType "application/json" `
+    -Body $body
+
+-----------------------------
+Invoke-RestMethod http://127.0.0.1:8000/workflows
+----------------------------------------------
+$body = @{
+    input_data = @{
+        value = 21
+    }
+} | ConvertTo-Json -Depth 10
+--------------------------------------------------
+Invoke-RestMethod `
+    -Method Post `
+    -Uri http://127.0.0.1:8000/executions/workflow/1 `
+    -ContentType "application/json" `
+    -Body $body
+-----------------------------------------------------
+(Invoke-WebRequest `
+    http://127.0.0.1:8000/monitoring/metrics
+).Content |
+Select-String "fluxengine_workflows"
+------------------------------------------------------
+
+(Invoke-WebRequest `
+    http://127.0.0.1:8000/monitoring/metrics
+).Content |
+Select-String "fluxengine_workflow_duration_seconds_count"
+
+---------------------------------------------------------
+
+
+EXECUTION CREATION
+$body = @{
+    input_data = @{
+        value = 21
+    }
+} | ConvertTo-Json -Depth 10
+
+$result = Invoke-RestMethod `
+    -Method Post `
+    -Uri http://127.0.0.1:8000/executions/workflow/1 `
+    -ContentType "application/json" `
+    -Body $body
+
+$result | Format-List *

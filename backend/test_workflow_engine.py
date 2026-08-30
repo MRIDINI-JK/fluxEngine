@@ -1,4 +1,16 @@
-from backend.workflow_engine import WorkflowCompiler
+import asyncio
+
+from backend.workflow_engine import (
+    WorkflowCompiler,
+    WorkflowExecutor,
+)
+from backend.monitoring.metrics import (
+    WORKFLOWS_STARTED,
+    WORKFLOWS_COMPLETED,
+    WORKFLOWS_FAILED,
+    WORKFLOWS_RUNNING,
+    WORKFLOW_DURATION,
+)
 
 
 workflow = {
@@ -47,26 +59,144 @@ workflow = {
 }
 
 
-print("Starting workflow engine test...")
+async def process_a(data):
 
-compiler = WorkflowCompiler()
+    print("Running process_a")
 
-compiled = compiler.compile(workflow)
+    return {
+        "message": "Task A completed"
+    }
 
-print("Workflow compiled successfully!")
 
-print(f"Name: {compiled.definition.name}")
+async def process_b(data):
 
-print(f"Version: {compiled.definition.version}")
+    print("Running process_b")
 
-print(f"Nodes: {len(compiled.graph.nodes)}")
+    return {
+        "message": "Task B completed"
+    }
 
-print("\nGraph:")
 
-for node in compiled.graph.nodes.values():
+async def main():
 
     print(
-        f"{node.id}: "
-        f"dependencies={node.dependencies}, "
-        f"dependents={node.dependents}"
+        "Starting workflow engine test..."
     )
+
+    # ----------------------------------------
+    # Compile
+    # ----------------------------------------
+
+    compiler = WorkflowCompiler()
+
+    compiled = compiler.compile(
+        workflow
+    )
+
+    print(
+        "Workflow compiled successfully!"
+    )
+
+    print(
+        f"Name: {compiled.definition.name}"
+    )
+
+    print(
+        f"Version: "
+        f"{compiled.definition.version}"
+    )
+
+    print(
+        f"Nodes: "
+        f"{len(compiled.graph.nodes)}"
+    )
+
+    print("\nGraph:")
+
+    for node in compiled.graph.nodes.values():
+
+        print(
+            f"{node.id}: "
+            f"dependencies={node.dependencies}, "
+            f"dependents={node.dependents}"
+        )
+
+    # ----------------------------------------
+    # Create executor
+    # ----------------------------------------
+
+    executor = WorkflowExecutor()
+
+    # ----------------------------------------
+    # Register handlers
+    # ----------------------------------------
+
+    executor.register_handler(
+        "python",
+        process_a,
+    )
+
+    # ----------------------------------------
+    # Execute workflow
+    # ----------------------------------------
+
+    print(
+        "\nExecuting workflow..."
+    )
+
+    context = await executor.execute(
+        workflow=compiled,
+
+        workflow_run_id="test-workflow-001",
+
+        input_data={
+            "value": 21
+        },
+    )
+    print("\nWorkflow Metrics:")
+
+    print(
+    "Started:",
+    WORKFLOWS_STARTED._value.get()
+)
+
+    print(
+    "Completed:",
+    WORKFLOWS_COMPLETED._value.get()
+)
+
+    print(
+    "Failed:",
+    WORKFLOWS_FAILED._value.get()
+)
+
+    print(
+    "Running:",
+    WORKFLOWS_RUNNING._value.get()
+)
+    # ----------------------------------------
+    # Result
+    # ----------------------------------------
+
+    print(
+        "\nWorkflow execution finished!"
+    )
+
+    print(
+        f"Status: {context.status}"
+    )
+
+    print(
+        f"Workflow Run ID: "
+        f"{context.workflow_run_id}"
+    )
+
+    print(
+        f"Outputs: "
+        f"{context.outputs}"
+    )
+
+
+if __name__ == "__main__":
+
+    asyncio.run(main())

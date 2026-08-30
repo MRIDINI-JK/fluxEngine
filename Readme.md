@@ -195,3 +195,25 @@ Phase 7 Architecture
              │
              ▼
          Prometheus
+
+         Module 12 
+
+                             FluxEngine
+                        │
+                 Workflow Engine
+                        │
+          ┌─────────────┴─────────────┐
+          ▼                           ▼
+      Task Started                Task Started
+          │                           │
+          ▼                           ▼
+      Task Completed              Task Completed
+          │                           │
+          └─────────────┬─────────────┘
+                        ▼
+                 Workflow Completed
+                        │
+                        ▼
+                  Prometheus
+
+                  
