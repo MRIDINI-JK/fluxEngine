@@ -442,3 +442,18 @@ class Worker:
             f"Worker heartbeat: "
             f"{self.worker_id}"
     )
+
+async def main():
+
+    worker = Worker(
+            capabilities={
+                "python"
+        }
+    )
+
+    await worker.start()
+
+
+if __name__ == "__main__":
+
+    asyncio.run(main())

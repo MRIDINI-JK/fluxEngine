@@ -216,4 +216,53 @@ Phase 7 Architecture
                         ▼
                   Prometheus
 
-                  
+                  Module 13
+
+FastAPI
+   ↓
+WorkflowExecutor
+   ↓
+python_handler()
+   ↓
+Task completed
+
+
+
+Module 14
+
+FastAPI
+   ↓
+WorkflowExecutor
+   ↓
+TaskDispatcher
+   ↓
+RabbitMQ
+   ↓
+Worker
+   ↓
+Task execution
+
+ TaskDispatcher
+                    │
+                    ▼
+              WorkerRegistry
+                    │
+             find_worker("python")
+                    │
+                    ▼
+               WorkerInfo
+                    │
+                    ▼
+                RabbitMQ
+                    │
+                    ▼
+                 Worker
+                    │
+                    ▼
+                TaskRunner
+                    │
+                    ▼
+               TaskResult
+
+
+               
