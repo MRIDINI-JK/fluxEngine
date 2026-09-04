@@ -96,21 +96,27 @@ class WorkerMonitor:
                 worker_id
             )
 
-            if worker:
+            if worker is None:
 
-                worker[
-                    "last_heartbeat"
-                ] = event.payload.get(
-                    "timestamp"
-                )
+                self.workers[worker_id] = {
+                "worker_id": worker_id,
+                "hostname": event.payload.get("hostname", "unknown"),
+                "capabilities": event.payload.get("capabilities", []),
+                "busy": event.payload.get("busy", False),
+                "last_heartbeat": event.payload.get("timestamp"),
+        }
 
-                worker[
-                    "busy"
-                ] = event.payload.get(
-                    "busy",
-                    False,
-                )
+                self.metrics.workers_registered(len(self.workers))
 
+                print(
+                f"Worker discovered from heartbeat: {worker_id}"
+        )
+
+            else:
+                worker["last_heartbeat"] = event.payload.get("timestamp")
+                worker["busy"] = event.payload.get("busy", False)
+                
+            
         elif (
             event.event_type
             == EventType.WORKER_OFFLINE

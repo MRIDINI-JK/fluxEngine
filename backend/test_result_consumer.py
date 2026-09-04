@@ -3,8 +3,10 @@ import asyncio
 from backend.dispatcher.result_consumer import (
     TaskResultConsumer,
 )
-
-from backend.event_bus import RabbitMQ
+from backend.dispatcher.result_store import (
+    TaskResultStore,
+)
+from backend.event_bus import RabbitMQ, rabbitmq
 
 
 async def main():
@@ -16,10 +18,16 @@ async def main():
     rabbitmq = RabbitMQ()
 
     await rabbitmq.connect()
+    result_store = TaskResultStore()
 
     consumer = TaskResultConsumer(
-        rabbitmq
-    )
+    rabbitmq,
+    result_store,
+)
+
+    # consumer = TaskResultConsumer(
+    #     rabbitmq
+    # )
 
     await consumer.start()
 

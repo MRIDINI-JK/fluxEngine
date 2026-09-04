@@ -1,5 +1,3 @@
-import uuid
-
 from aio_pika import Message
 
 from backend.common.logger import logger
@@ -7,14 +5,7 @@ from backend.common.logger import logger
 from backend.event_bus import RabbitMQ
 
 from backend.event_bus.events import (
-    Event,
-    EventType,
     TaskMessage,
-)
-
-from backend.worker.registry import (
-    WorkerInfo,
-    WorkerRegistry,
 )
 
 
@@ -23,19 +14,49 @@ class TaskDispatcher:
     def __init__(
         self,
         rabbitmq: RabbitMQ,
-        registry: WorkerRegistry,
+        worker_monitor,
     ):
 
         self.rabbitmq = rabbitmq
 
-        self.registry = registry
+        self.worker_monitor = worker_monitor
+
+    def find_worker(
+        self,
+        task_type: str,
+    ):
+
+        workers = (
+            self.worker_monitor.get_workers()
+        )
+
+        for worker in workers:
+
+            capabilities = worker.get(
+                "capabilities",
+                [],
+            )
+
+            busy = worker.get(
+                "busy",
+                False,
+            )
+
+            if (
+                task_type in capabilities
+                and not busy
+            ):
+
+                return worker
+
+        return None
 
     async def dispatch(
         self,
         task: TaskMessage,
-    ) -> WorkerInfo | None:
+    ):
 
-        worker = self.registry.find_worker(
+        worker = self.find_worker(
             task.task_type
         )
 
@@ -70,12 +91,13 @@ class TaskDispatcher:
             routing_key="task",
         )
 
-        worker.busy = True
+        worker["busy"] = True
 
         logger.info(
             f"Task dispatched: "
             f"{task.task_id} "
-            f"-> worker {worker.worker_id}"
+            f"-> worker "
+            f"{worker['worker_id']}"
         )
 
         return worker

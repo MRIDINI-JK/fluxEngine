@@ -1,9 +1,11 @@
+import asyncio
 import uuid
 from typing import Any
 
 from fastapi import (
     APIRouter,
     HTTPException,
+    Request,
 )
 
 from backend.api.schemas import (
@@ -36,10 +38,16 @@ executions: dict[
 compiler = WorkflowCompiler()
 
 
+# ==========================================================
+# Execute workflow
+# ==========================================================
+
 async def execute_workflow(
     workflow_id: int,
     workflow_run_id: str,
     input_data: dict[str, Any],
+    task_dispatcher,
+    result_store,
 ):
 
     execution = executions[
@@ -47,51 +55,56 @@ async def execute_workflow(
     ]
 
     try:
+
+        # --------------------------------------------------
+        # Get workflow
+        # --------------------------------------------------
+
         workflow_record = workflows[
-    workflow_id
-]
-        workflow_definition = workflow_record[
-            "definition"
+            workflow_id
         ]
+
+        workflow_definition = (
+            workflow_record["definition"]
+        )
+
+        # --------------------------------------------------
+        # Compile workflow
+        # --------------------------------------------------
 
         compiled = compiler.compile(
             workflow_definition
         )
 
-        executor = WorkflowExecutor()
+        # --------------------------------------------------
+        # Create distributed executor
+        # --------------------------------------------------
 
-        async def python_handler(data):
-
-            print(
-                f"Executing task: "
-                f"{data['task_id']}"
-            )
-
-            return {
-                "task_id":
-                    data["task_id"],
-
-                "message":
-                    "Task completed",
-
-                "input":
-                    data["input"],
-            }
-
-        executor.register_handler(
-            "python",
-            python_handler,
+        executor = WorkflowExecutor(
+            task_dispatcher=task_dispatcher,
+            result_store=result_store,
         )
 
         execution["status"] = "RUNNING"
 
+        print(
+            f"Starting distributed workflow: "
+            f"{workflow_run_id}"
+        )
+
+        # --------------------------------------------------
+        # Execute
+        # --------------------------------------------------
+
         context = await executor.execute(
             workflow=compiled,
-
             workflow_run_id=workflow_run_id,
-
             input_data=input_data,
         )
+
+        # --------------------------------------------------
+        # Update execution state
+        # --------------------------------------------------
 
         execution["status"] = (
             context.status.value
@@ -132,14 +145,23 @@ async def execute_workflow(
         )
 
 
+# ==========================================================
+# Start workflow
+# ==========================================================
+
 @router.post(
     "/workflow/{workflow_id}",
     response_model=ExecutionResponse,
 )
 async def start_workflow(
     workflow_id: int,
-    request: ExecutionCreate,
+    execution_data: ExecutionCreate,
+    request: Request,
 ):
+
+    # ------------------------------------------------------
+    # Check workflow
+    # ------------------------------------------------------
 
     workflow = workflows.get(
         workflow_id
@@ -151,6 +173,22 @@ async def start_workflow(
             status_code=404,
             detail="Workflow not found",
         )
+
+    # ------------------------------------------------------
+    # Get shared distributed services
+    # ------------------------------------------------------
+
+    task_dispatcher = (
+        request.app.state.task_dispatcher
+    )
+
+    result_store = (
+        request.app.state.result_store
+    )
+
+    # ------------------------------------------------------
+    # Create workflow run
+    # ------------------------------------------------------
 
     workflow_run_id = str(
         uuid.uuid4()
@@ -168,28 +206,49 @@ async def start_workflow(
             "PENDING",
 
         "input_data":
-            request.input_data,
+            execution_data.input_data,
 
         "outputs":
             {},
+
+        "error":
+            None,
     }
 
     executions[
         workflow_run_id
     ] = execution
 
-    await execute_workflow(
-        workflow_id=workflow_id,
+    # ------------------------------------------------------
+    # Start workflow in background
+    # ------------------------------------------------------
 
-        workflow_run_id=workflow_run_id,
+    asyncio.create_task(
+        execute_workflow(
+            workflow_id=workflow_id,
 
-        input_data=request.input_data,
+            workflow_run_id=workflow_run_id,
+
+            input_data=(
+                execution_data.input_data
+            ),
+
+            task_dispatcher=(
+                task_dispatcher
+            ),
+
+            result_store=(
+                result_store
+            ),
+        )
     )
 
-    return executions[
-        workflow_run_id
-    ]
+    return execution
 
+
+# ==========================================================
+# Get execution
+# ==========================================================
 
 @router.get(
     "/{workflow_run_id}",
@@ -211,3 +270,67 @@ async def get_execution(
         )
 
     return execution
+
+
+# ==========================================================
+# Temporary dispatcher test
+# ==========================================================
+
+@router.post(
+    "/test-dispatch"
+)
+async def test_dispatch(
+    request: Request,
+):
+
+    dispatcher = (
+        request.app.state.task_dispatcher
+    )
+
+    from backend.event_bus.events import (
+        TaskMessage,
+    )
+
+    task = TaskMessage(
+        task_run_id=str(
+            uuid.uuid4()
+        ),
+
+        workflow_run_id=(
+            "workflow-test-001"
+        ),
+
+        task_id="task_a",
+
+        task_type="python",
+
+        payload={
+            "value": 21
+        },
+    )
+
+    worker = await dispatcher.dispatch(
+        task
+    )
+
+    if worker is None:
+
+        raise HTTPException(
+            status_code=503,
+            detail="No available worker",
+        )
+
+    return {
+
+        "status":
+            "dispatched",
+
+        "task_run_id":
+            task.task_run_id,
+
+        "task_id":
+            task.task_id,
+
+        "worker_id":
+            worker["worker_id"],
+    }

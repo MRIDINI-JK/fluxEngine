@@ -10,11 +10,7 @@ from backend.api.routes import (
     monitoring_router,
     worker_router,
 )
-
-
-from backend.monitoring import (
-    TaskMonitor,
-)
+from backend.dispatcher.dispatcher import TaskDispatcher
 
 from backend.api.websocket import (
     router as websocket_router,
@@ -23,44 +19,115 @@ from backend.api.websocket import (
 from backend.event_bus import RabbitMQ
 
 from backend.monitoring import (
+    TaskMonitor,
     WorkerMonitor,
 )
 
+from backend.dispatcher.result_store import (
+    TaskResultStore,
+)
 
-rabbitmq = RabbitMQ()
+from backend.dispatcher.result_consumer import (
+    TaskResultConsumer,
+)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
 
+    # ==========================================
+    # 1. Connect to RabbitMQ
+    # ==========================================
+
     print("1. Connecting to RabbitMQ...")
+
     rabbitmq = RabbitMQ()
     await rabbitmq.connect()
 
     print("2. RabbitMQ connected")
 
-    worker_monitor = WorkerMonitor(
-        rabbitmq    
-    )
 
+    # ==========================================
+    # 2. Create monitors
+    # ==========================================
+
+    worker_monitor = WorkerMonitor(
+        rabbitmq
+    )
+    
     task_monitor = TaskMonitor(
         rabbitmq
     )
+    task_dispatcher = TaskDispatcher(
+        rabbitmq=rabbitmq,
+        worker_monitor=worker_monitor,
+    )
+
+    # ==========================================
+    # 3. Create ResultStore
+    # ==========================================
+
+    result_store = TaskResultStore()
+
+
+    # ==========================================
+    # 4. Create ResultConsumer
+    # ==========================================
+
+    result_consumer = TaskResultConsumer(
+        rabbitmq=rabbitmq,
+        result_store=result_store,
+        worker_monitor=worker_monitor,
+    )
+
+
+    # ==========================================
+    # 5. Save shared components in app.state
+    # ==========================================
 
     app.state.rabbitmq = rabbitmq
     app.state.worker_monitor = worker_monitor
     app.state.task_monitor = task_monitor
+    app.state.task_dispatcher = task_dispatcher
+    app.state.result_store = result_store
+    app.state.result_consumer = result_consumer
+
+
+    # ==========================================
+    # 6. Start background services
+    # ==========================================
+
     print("3. Starting WorkerMonitor...")
 
     await worker_monitor.start()
+
     await task_monitor.start()
-    print("4. WorkerMonitor started")
+
+    await result_consumer.start()
+
+    print("4. Background services started")
+
+
+    # ==========================================
+    # 7. API is running
+    # ==========================================
 
     yield
 
-    print("5. Closing RabbitMQ...")
+
+    # ==========================================
+    # 8. Shutdown
+    # ==========================================
+
+    print("5. Shutting down...")
+
+    await result_consumer.stop()
+
+    await worker_monitor.consumer.stop()
 
     await rabbitmq.close()
+
+    print("6. RabbitMQ closed")
 
 
 app = FastAPI(
@@ -70,6 +137,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
+# ==========================================
+# Routes
+# ==========================================
 
 app.include_router(
     health_router

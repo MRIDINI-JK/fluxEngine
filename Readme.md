@@ -267,7 +267,7 @@ Task execution
 
                Module 15
 
-               
+
                  TaskDispatcher
                        │
                        ▼
@@ -297,3 +297,57 @@ Task execution
                        │
                        ▼
               TaskResultConsumer
+
+              Module 16 - distributed execution pipeline 
+
+                                  POST /executions
+                           │
+                           ▼
+                  WorkflowExecutor
+                           │
+                           ▼
+                    TaskDispatcher
+                           │
+                           ▼
+                       RabbitMQ
+                           │
+                           ▼
+                        Worker
+                           │
+                           ▼
+                       TaskResult
+                           │
+                           ▼
+                    ResultConsumer
+                           │
+                           ▼
+                  WorkflowExecutor
+
+                  16th Module 
+
+                  FluxEngine
+                        │
+                        ▼
+                 FastAPI / API
+                        │
+             ┌──────────┴──────────┐
+             │                     │
+             ▼                     ▼
+       WorkerMonitor         TaskDispatcher
+             │                     │
+             │                     ▼
+             │                 RabbitMQ
+             │                     │
+             │                     ▼
+             │                   Worker
+             │                     │
+             │                     ▼
+             │                 TaskResult
+             │                     │
+             │                     ▼
+             │               ResultConsumer
+             │                     │
+             │                     ▼
+             └────────────── ResultStore
+
+             

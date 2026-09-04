@@ -253,3 +253,64 @@ $result = Invoke-RestMethod `
     -Body $body
 
 $result | Format-List *
+
+
+
+Latest distributed Demo
+
+$body = @'
+{
+  "name": "Distributed Demo",
+  "version": 1,
+  "definition": {
+    "name": "Distributed Demo",
+    "version": 1,
+    "nodes": [
+      {
+        "id": "start",
+        "type": "start"
+      },
+      {
+        "id": "task_a",
+        "type": "python",
+        "config": {
+          "function": "process_a"
+        }
+      },
+      {
+        "id": "task_b",
+        "type": "python",
+        "config": {
+          "function": "process_b"
+        }
+      },
+      {
+        "id": "end",
+        "type": "end"
+      }
+    ],
+    "edges": [
+      {
+        "source": "start",
+        "target": "task_a"
+      },
+      {
+        "source": "task_a",
+        "target": "task_b"
+      },
+      {
+        "source": "task_b",
+        "target": "end"
+      }
+    ]
+  }
+}
+'@
+
+Invoke-RestMethod `
+    -Method POST `
+    -Uri "http://127.0.0.1:8000/workflows" `
+    -ContentType "application/json" `
+    -Body $body
+
+    

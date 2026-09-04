@@ -1,11 +1,15 @@
 import asyncio
+import time
+import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any
-import time
+
 from backend.common.enums import (
     ExecutionStatus,
     TaskStatus,
 )
+
+from backend.event_bus.events import TaskMessage
 
 from backend.monitoring.metrics import (
     WORKFLOWS_STARTED,
@@ -47,8 +51,10 @@ class WorkflowExecutor:
 
     def __init__(
         self,
-        checkpoint_manager: CheckpointManager | None = None,
-        retry_policy: RetryPolicy | None = None,
+        checkpoint_manager=None,
+        retry_policy=None,
+        task_dispatcher=None,
+        result_store=None,
     ):
 
         self.checkpoint_manager = (
@@ -61,9 +67,14 @@ class WorkflowExecutor:
             or RetryPolicy()
         )
 
+        self.task_dispatcher = task_dispatcher
+        self.result_store = result_store
+
+        # Kept for compatibility with the existing
+        # local execution functionality.
         self.handlers: dict[
             str,
-            TaskHandler
+            TaskHandler,
         ] = {}
 
     def register_handler(
@@ -80,22 +91,18 @@ class WorkflowExecutor:
         workflow_run_id: str,
         input_data: dict[str, Any] | None = None,
     ):
-        # print("========== WORKFLOW EXECUTOR ENTERED ==========")
-        # print("WORKFLOW RUN ID:", workflow_run_id)
 
         context = ExecutionContext(
             workflow_run_id=workflow_run_id,
             input_data=input_data or {},
         )
+
         print(
-    "WORKFLOW EXECUTOR CALLED:",
-    workflow_run_id,
-)
+            "WORKFLOW EXECUTOR CALLED:",
+            workflow_run_id,
+        )
+
         WORKFLOWS_STARTED.inc()
-        # print(
-    # "WORKFLOW STARTED METRIC:",
-    # WORKFLOWS_STARTED._value.get(),
-# )
         WORKFLOWS_RUNNING.inc()
 
         start_time = time.perf_counter()
@@ -135,11 +142,9 @@ class WorkflowExecutor:
                     ExecutionStatus.SUCCESS,
                 )
             )
+
             WORKFLOWS_COMPLETED.inc()
-#             print(
-#     "WORKFLOW COMPLETED METRIC:",
-#     WORKFLOWS_COMPLETED._value.get(),
-# )
+
         except Exception as exc:
 
             context.error = str(exc)
@@ -150,20 +155,23 @@ class WorkflowExecutor:
                     ExecutionStatus.FAILED,
                 )
             )
+
             WORKFLOWS_FAILED.inc()
+
             self.checkpoint_manager.save(context)
 
             raise
+
         finally:
 
             duration = (
-            time.perf_counter()
-            - start_time
-    )
+                time.perf_counter()
+                - start_time
+            )
 
             WORKFLOW_DURATION.observe(
-        duration
-    )
+                duration
+            )
 
             WORKFLOWS_RUNNING.dec()
 
@@ -255,6 +263,10 @@ class WorkflowExecutor:
 
         task = context.tasks[task_id]
 
+        # ==========================================
+        # 1. READY -> RUNNING
+        # ==========================================
+
         task.status = (
             ExecutionStateMachine.transition_task(
                 task.status,
@@ -268,39 +280,127 @@ class WorkflowExecutor:
             task_id
         )
 
-        handler = self.handlers.get(
-            node.node_type
-        )
+        # ==========================================
+        # 2. Check distributed components
+        # ==========================================
 
-        if handler is None:
+        if self.task_dispatcher is None:
 
             raise RuntimeError(
-                f"No handler registered for "
+                "TaskDispatcher is not configured"
+            )
+
+        if self.result_store is None:
+
+            raise RuntimeError(
+                "TaskResultStore is not configured"
+            )
+
+        # ==========================================
+        # 3. Create task run ID
+        # ==========================================
+
+        task_run_id = str(
+            uuid.uuid4()
+        )
+
+        # ==========================================
+        # 4. Build TaskMessage
+        # ==========================================
+
+        task_message = TaskMessage(
+            task_run_id=task_run_id,
+            workflow_run_id=context.workflow_run_id,
+            task_id=task_id,
+            task_type=node.node_type,
+            payload={
+                "input": context.input_data,
+                "outputs": context.outputs,
+                "config": node.config,
+            },
+        )
+
+        print(
+            f"Dispatching task: {task_id}"
+        )
+
+        # ==========================================
+        # 5. Create waiter BEFORE dispatch
+        # ==========================================
+
+        self.result_store.create_waiter(
+            task_run_id
+        )
+
+        # ==========================================
+        # 6. Dispatch to worker
+        # ==========================================
+
+        worker = await self.task_dispatcher.dispatch(
+            task_message
+        )
+
+        if worker is None:
+
+            task.error = (
+                f"No available worker for "
                 f"task type: {node.node_type}"
             )
 
-        try:
-
-            result = await handler(
-                {
-                    "workflow_run_id":
-                        context.workflow_run_id,
-
-                    "task_id":
-                        task_id,
-
-                    "input":
-                        context.input_data,
-
-                    "outputs":
-                        context.outputs,
-
-                    "config":
-                        node.config,
-                }
+            task.status = (
+                ExecutionStateMachine.transition_task(
+                    task.status,
+                    TaskStatus.FAILED,
+                )
             )
 
-            task.result = result
+            raise RuntimeError(
+                task.error
+            )
+
+        print(
+            f"Task dispatched: {task_id} "
+            f"-> worker {worker['worker_id']}"
+        )
+
+        # ==========================================
+        # 7. Wait for worker result
+        # ==========================================
+
+        try:
+
+            result = (
+                await self.result_store.wait_for_result(
+                    task_run_id,
+                    timeout=60,
+                )
+            )
+
+        except asyncio.TimeoutError:
+
+            task.error = (
+                f"Task timed out waiting for result: "
+                f"{task_id}"
+            )
+
+            task.status = (
+                ExecutionStateMachine.transition_task(
+                    task.status,
+                    TaskStatus.FAILED,
+                )
+            )
+
+            raise RuntimeError(
+                task.error
+            )
+
+        # ==========================================
+        # 8. Process result
+        # ==========================================
+
+        if result.success:
+
+            task.result = result.result
 
             task.status = (
                 ExecutionStateMachine.transition_task(
@@ -311,11 +411,23 @@ class WorkflowExecutor:
 
             context.outputs[
                 task_id
-            ] = result
+            ] = result.result
 
-        except Exception as exc:
+            print(
+                f"Distributed task completed: "
+                f"{task_id}"
+            )
 
-            task.error = str(exc)
+        else:
+
+            task.error = (
+                result.error
+                or "Task failed"
+            )
+
+            # ======================================
+            # Retry
+            # ======================================
 
             if self.retry_policy.should_retry(
                 task.attempts
@@ -341,7 +453,9 @@ class WorkflowExecutor:
                     )
                 )
 
-                await asyncio.sleep(delay)
+                await asyncio.sleep(
+                    delay
+                )
 
                 task.status = (
                     ExecutionStateMachine.transition_task(
@@ -365,7 +479,9 @@ class WorkflowExecutor:
                     )
                 )
 
-                raise
+                raise RuntimeError(
+                    task.error
+                )
 
     def _all_tasks_complete(
         self,

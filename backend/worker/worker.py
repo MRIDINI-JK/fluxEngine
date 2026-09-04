@@ -82,20 +82,36 @@ class Worker:
         self.heartbeat_task = None
         self.busy = False
     async def python_task(
-        self,
-        payload: dict[str, Any],
-    ):
+    self,
+    payload: dict[str, Any],
+):
+        logger.info(f"FULL TASK PAYLOAD: {payload}")
 
-        value = payload.get(
-            "value",
-            0,
-        )
+        input_data = payload.get("input", {})
+        outputs = payload.get("outputs", {})
+        config = payload.get("config", {})
 
-        logger.info(
-            f"Running python task with value={value}"
-        )
+        value = input_data.get("value", 0)
 
-        return value * 2
+        logger.info(f"Running python task with value={value}")
+        logger.info(f"Previous outputs: {outputs}")
+        logger.info(f"Task config: {config}")
+
+        function = config.get("function")
+
+        if function == "process_a":
+            result = value * 2
+
+        elif function == "process_b":
+            previous_result = outputs.get("task_a", 0)
+            result = previous_result + 10
+
+        else:
+            result = value
+
+        logger.info(f"Task result: {result}")
+
+        return result
 
     async def start(self):
 
@@ -354,6 +370,8 @@ class Worker:
             "capabilities": list(
                 self.capabilities
             ),
+            "busy": self.busy,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         },
     )
 
@@ -428,9 +446,7 @@ class Worker:
                 "capabilities": list(
                     self.capabilities
             ),
-                "timestamp": datetime.now(
-        timezone.utc
-    ).isoformat(),
+               
 
                 "busy": self.busy,
                 "timestamp": datetime.now(
